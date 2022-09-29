@@ -31,6 +31,16 @@ def get_similarity(s1, s2):
     return util.pytorch_cos_sim(s1, s2)[0].numpy().item()
 
 def link(title, updated_txt, offset, start, end):
+    """
+    If the text to be linked is not already enclosed in a link, and if there are no other links ahead,
+    then create a link
+    
+    :param title: the title of the page we're linking to
+    :param updated_txt: the text we're working on
+    :param offset: the number of characters that have been added to the document so far
+    :param start: the index of the first character of the text to be linked
+    :param end: the end index of the text to be linked
+    """
     cont = False
     ret = False
     txt_to_link = updated_txt[start + offset:end + offset]
@@ -70,6 +80,15 @@ def link(title, updated_txt, offset, start, end):
     return updated_txt, offset, cont, ret 
 
 def link_title(title, txt):
+    """
+    - Find all instances of the title in the text
+    - For each instance, check if it's surrounded by [], | or other letters
+    - If it's not, then link it
+    
+    :param title: the title of the page we're linking to
+    :param txt: the text to be updated
+    :return: The updated text with the title linked.
+    """
     updated_txt = txt
     # find instances of the title where it's not surrounded by [], | or other letters
     matches = re.finditer('(?<!([\[\w\|]))' + re.escape(title.lower()) + '(?!([\|\]\w]))', txt.lower())
@@ -82,9 +101,18 @@ def link_title(title, txt):
         if ret:
             return updated_txt 
 
+    # 
     return updated_txt
 
 def update_frontmatter(title, keyword):
+    """
+    It looks for a file with the title of the note in the Obsidian vault, and if it finds it, it adds
+    the keyword to the frontmatter of the file. If it doesn't find it, it creates a new file with the
+    title of the note and the keyword in the frontmatter
+    
+    :param title: the title of the note you want to add the alias to
+    :param keyword: the keyword you want to add to the frontmatter
+    """
     found = False
     if title in rev_alias_dict:
         title = rev_alias_dict[title]
@@ -114,6 +142,15 @@ def update_frontmatter(title, keyword):
             f.write('---\naliases: ["' + keyword + '"]\n---\n')
 
 def fuzzy_match_all_titles(page_titles, content, title_embeddings):
+    """
+    > For each keyword in the content, find the most similar title and link it if the similarity is
+    above a threshold
+    
+    :param page_titles: a list of all the page titles in the wiki
+    :param content: the text of the page you want to link
+    :param title_embeddings: a list of embeddings for each page title
+    :return: The content of the page with the links added.
+    """
     r.extract_keywords_from_text(content.replace('[[', '').replace(']]', ''))
     ranked_phrases = r.get_ranked_phrases()
     ranked_phrases += [phrase.strip() for phrase in re.split('\.|\?|,|!|:|;|\n', content)]
@@ -136,6 +173,23 @@ def fuzzy_match_all_titles(page_titles, content, title_embeddings):
     return content
 
 def link_content(content, page_titles, title_embeddings=None):
+    """
+    > We iterate through our page titles, and if we find a case-insensitive match, we link it. 
+    
+    We also have a `fuzzy_match` flag that we can set to `True` if we want to use fuzzy matching. 
+    
+    We'll start by creating a list of page titles. 
+    
+    We'll also create a list of content. 
+    
+    We'll then iterate through our content and link the page titles. 
+    
+    Let's see how this works.
+    
+    :param content: the text we want to link
+    :param page_titles: a list of page titles to link to
+    :param title_embeddings: a dictionary of title embeddings, keyed by title
+    """
     # make a copy of our content and lowercase it for search purposes
     content_low = content.lower()
 
@@ -159,6 +213,11 @@ def link_content(content, page_titles, title_embeddings=None):
     return content
 
 def build_page_titles():
+    """
+    It builds a list of page titles and aliases from the `aliases.yml` file and the `*.md` files in the
+    Obsidian vault
+    :return: A list of page titles and aliases.
+    """
     page_titles = []
     aliases_file = obsidian_home / ("aliases" + (".yml" if yaml_mode else ".md"))
 
@@ -254,6 +313,14 @@ def build_page_titles():
     return page_titles
 
 def load_titles_and_embeddings(titles_file, embs_file, load_embs=True):
+    """
+    It loads the titles and embeddings from the files
+    
+    :param titles_file: the file that contains the titles of the pages that have been visited
+    :param embs_file: the file where the embeddings are stored
+    :param load_embs: whether to load the embeddings or not, defaults to True (optional)
+    :return: page_titles and title_embeddings
+    """
     page_titles = []
     title_embeddings = None
     if titles_file.exists():
@@ -267,6 +334,11 @@ def load_titles_and_embeddings(titles_file, embs_file, load_embs=True):
     return page_titles, title_embeddings
 
 def load_page_titles():
+    """
+    If the user wants to use the non-orphan links, then load the non-orphan links and non-orphan
+    embeddings. Otherwise, load the orphan links and orphan embeddings
+    :return: page_titles and title_embeddings
+    """
     # if links cache file exists add all links to page_titles for linking
     page_titles = []
     title_embeddings = None
@@ -280,6 +352,15 @@ def load_page_titles():
     return load_titles_and_embeddings(link_cache, link_embs_file)
 
 def write_if_different(all_links, titles, link_file, embs_file):
+    """
+    If the number of links and titles are different, or if the links are different, then write the links
+    to a file and get the embeddings for the links
+    
+    :param all_links: a list of all the links in the Wikipedia page
+    :param titles: a list of page titles
+    :param link_file: the file where the links are stored
+    :param embs_file: the file where the embeddings are stored
+    """
     all_links = set(all_links)
     titles = set(titles)
     different = len(all_links) != len(titles)
@@ -299,6 +380,11 @@ def write_if_different(all_links, titles, link_file, embs_file):
             pkl.dump(title_embeddings, f)
         
 def get_orphans():
+    """
+    It walks through all the files in the Obsidian vault, finds all the links, and returns a list of all
+    the links
+    :return: A list of all the links in the vault.
+    """
     all_links = []
     for root, dirs, files in os.walk(obsidian_home):
         for file in files:
@@ -317,6 +403,9 @@ def get_orphans():
 
 
 def build_links():
+    """
+    It builds a list of all the links in the vault, and then writes them to a file
+    """
     print("Building non-orphan links cache...")
     built_links = build_page_titles() 
     stored_titles, _ = load_titles_and_embeddings(non_orphan_links, non_orphan_link_emb, load_embs=False) 
@@ -366,6 +455,14 @@ def build_links():
     print("Orphan links cache and embeddings built.")
 
 def run_on_text(text, page_titles, title_embeddings):
+    """
+    It takes a text string, a list of page titles, and a dictionary of title embeddings, and returns the
+    linked text string
+    
+    :param text: the text to be processed
+    :param page_titles: a list of all the page titles in the wiki
+    :param title_embeddings: a dictionary of page titles to embeddings
+    """
     # unlink text prior to processing if enabled
     if (clear_links):
         text = unlinkr.unlink_text(text)
@@ -385,6 +482,13 @@ def run_on_text(text, page_titles, title_embeddings):
     return linked_txt
 
 def run_on_clipboard(page_titles, title_embeddings=None):
+    """
+    It takes the text from the clipboard, links it, and then puts the linked text back on the clipboard
+    
+    :param page_titles: a list of all the page titles in the wiki
+    :param title_embeddings: a dictionary of page titles to embeddings. If you don't have this, you can
+    use the function get_title_embeddings() to get it
+    """
     # get text from clipboard
     clip_txt = pyperclip.paste()
     #print('--- clipboard text ---')
@@ -393,6 +497,16 @@ def run_on_clipboard(page_titles, title_embeddings=None):
 
     linked_txt = run_on_text(clip_txt, page_titles, title_embeddings=title_embeddings)
 
+    """
+    It takes a filepath, a list of page titles, and a list of title embeddings, and then it opens the
+    file at the filepath, runs the text through the linker, and then writes the linked text back to the
+    file
+    
+    :param filepath: the path to the file you want to link
+    :param page_titles: a list of page titles to link to
+    :param title_embeddings: a dictionary of page titles to embeddings. If you don't have embeddings,
+    you can use the default embeddings, which are the embeddings of the first sentence of the page
+    """
     # send the linked text to the clipboard
     pyperclip.copy(linked_txt)
     #print(clip_txt)
@@ -400,6 +514,16 @@ def run_on_clipboard(page_titles, title_embeddings=None):
     print('linked text copied to clipboard')
 
 def run_on_file(filepath, page_titles, title_embeddings=None):
+    """
+    It takes a filepath, a list of page titles, and a list of title embeddings, and then it opens the
+    file at the filepath, runs the text through the linker, and then writes the linked text back to the
+    file
+    
+    :param filepath: the path to the file you want to link
+    :param page_titles: a list of page titles to link to
+    :param title_embeddings: a dictionary of page titles to embeddings. If you don't have embeddings,
+    you can use the default embeddings, which are the embeddings of the first sentence of the page
+    """
     filepath = Path(filepath)
     file = str(filepath.name)
     root = str(filepath.parent)
@@ -410,6 +534,13 @@ def run_on_file(filepath, page_titles, title_embeddings=None):
         f.write(linked_text)
 
 def run_on_vault(page_titles, title_embeddings=None):
+    """
+    It walks through the vault, and for each file, it runs the `run_on_file` function
+    
+    :param page_titles: a list of all the page titles in your vault
+    :param title_embeddings: a dictionary of page titles to embeddings. If you have a pre-trained model,
+    you can pass it in here
+    """
     for root, dirs, files in os.walk(obsidian_home):
         for file in files:
             # ignore any 'dot' folders (.trash, .obsidian, etc.)
@@ -468,6 +599,7 @@ if build_cache:
     print('Rebuilt orphans links cache file.')
 
     
+# Checking if the user has entered any of the arguments.
 if args.file or args.vault or args.clipboard:
     if args.fuzzy_match:
         from rake_nltk import Rake
