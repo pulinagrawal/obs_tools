@@ -460,7 +460,7 @@ def get_model():
     global model, st, util
     if not st:
         from sentence_transformers import SentenceTransformer as st, util
-    model = st('stsb-roberta-large')
+    model = st('all-MiniLM-L6-v2')
     
 if build_cache:
     get_model()
